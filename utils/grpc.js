@@ -22,7 +22,7 @@ function grpcStatusToHttp(code) {
 function handleGrpcError(res, error) {
   const status = grpcStatusToHttp(error.code);
   const message = error.message || "Upstream service error";
-  console.log(error);
+  res.locals.error = error;
   return res.status(status).json({ message });
 }
 

@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth.routes');
 const productRoutes = require('./routes/products.routes');
 const orderRoutes = require('./routes/orders.routes');
 const { initAuthDb } = require('./services/auth.service');
+const { errorLogger } = require('./middleware/error-logger');
 
 const app = express();
 
@@ -18,8 +19,8 @@ app.use(express.json({ limit: '1mb' }));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.use('/api/auth', authRoutes);
-app.use('/api/products', authMiddleware, productRoutes);
-app.use('/api/orders', authMiddleware, orderRoutes);
+app.use('/api/products', errorLogger, authMiddleware, productRoutes);
+app.use('/api/orders', errorLogger, authMiddleware, orderRoutes);
 
 app.use((err, _req, res, _next) => {
   const status = err.status || 500;

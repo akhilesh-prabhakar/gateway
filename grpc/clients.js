@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
@@ -14,10 +15,26 @@ function loadProto(protoFile, packageName) {
   return loaded[packageName];
 }
 
-const protoRoot = path.join(__dirname, '..', '..', 'proto');
+function resolveProtoPath(fileName) {
+  const candidates = [
+    process.env.PROTO_ROOT,
+    path.join(__dirname, '..', '..', 'proto'),
+    path.join(__dirname, '..', 'proto'),
+  ].filter(Boolean);
 
-const productProto = loadProto(path.join(protoRoot, 'product.proto'), 'product');
-const orderProto = loadProto(path.join(protoRoot, 'order.proto'), 'order');
+  for (const root of candidates) {
+    const fullPath = path.join(root, fileName);
+    if (fs.existsSync(fullPath)) {
+      return fullPath;
+    }
+  }
+
+  const searched = candidates.map((root) => path.join(root, fileName)).join(', ');
+  throw new Error(`Proto file not found: ${fileName}. Searched: ${searched}`);
+}
+
+const productProto = loadProto(resolveProtoPath('product.proto'), 'product');
+const orderProto = loadProto(resolveProtoPath('order.proto'), 'order');
 
 const productClient = new productProto.ProductService(
   process.env.PRODUCT_SERVICE_URL || '127.0.0.1:5001',
