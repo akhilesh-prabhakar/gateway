@@ -124,8 +124,120 @@ async function login({ email, password }) {
   });
 }
 
+async function getProfile(userId) {
+  if (!userId) {
+    throw createError(401, "Unauthorized");
+  }
+
+  return new Promise((resolve, reject) => {
+    db.get(
+      "SELECT id, name, email, created_at, updated_at FROM users WHERE id = ?",
+      [userId],
+      (err, row) => {
+        if (err) {
+          return reject(createError(500, err.message));
+        }
+        if (!row) {
+          return reject(createError(404, "User not found"));
+        }
+        return resolve({
+          userId: row.id,
+          name: row.name,
+          email: row.email,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        });
+      },
+    );
+  });
+}
+
+async function updateProfile(userId, { name, email, password }) {
+  if (!userId) {
+    throw createError(401, "Unauthorized");
+  }
+
+  if (!name && !email && !password) {
+    throw createError(400, "At least one field is required");
+  }
+
+  return new Promise((resolve, reject) => {
+    const ensureEmailAvailable = (callback) => {
+      if (!email) {
+        return callback();
+      }
+      db.get("SELECT id FROM users WHERE email = ?", [email], (err, row) => {
+        if (err) {
+          return reject(createError(500, err.message));
+        }
+        if (row && row.id !== userId) {
+          return reject(createError(409, "Email already in use"));
+        }
+        return callback();
+      });
+    };
+
+    const applyUpdate = async () => {
+      const updates = [];
+      const params = [];
+
+      if (name) {
+        updates.push("name = ?");
+        params.push(name);
+      }
+      if (email) {
+        updates.push("email = ?");
+        params.push(email);
+      }
+      if (password) {
+        try {
+          const passwordHash = await bcrypt.hash(password, 10);
+          updates.push("password_hash = ?");
+          params.push(passwordHash);
+        } catch (hashErr) {
+          return reject(createError(500, hashErr.message));
+        }
+      }
+
+      const updatedAt = new Date().toISOString();
+      updates.push("updated_at = ?");
+      params.push(updatedAt);
+      params.push(userId);
+
+      db.run(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`, params, (err) => {
+        if (err) {
+          return reject(createError(500, err.message));
+        }
+        db.get(
+          "SELECT id, name, email FROM users WHERE id = ?",
+          [userId],
+          (fetchErr, row) => {
+            if (fetchErr) {
+              return reject(createError(500, fetchErr.message));
+            }
+            if (!row) {
+              return reject(createError(404, "User not found"));
+            }
+            const token = signToken(row);
+            return resolve({
+              userId: row.id,
+              name: row.name,
+              email: row.email,
+              token,
+            });
+          },
+        );
+      });
+    };
+
+    ensureEmailAvailable(applyUpdate);
+  });
+}
+
 module.exports = {
   initAuthDb,
   signup,
   login,
+  getProfile,
+  updateProfile,
 };
